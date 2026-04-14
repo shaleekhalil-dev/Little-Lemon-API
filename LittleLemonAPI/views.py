@@ -1,3 +1,10 @@
+"""
+Developed by: Shalee Khalil (shaleekhalil-dev)
+Project: Little Lemon API - Meta Full Stack Specialization
+Purpose: Implementation of RBAC, Search, Filtering, and Ordering for a Restaurant System.
+Date: April 2026
+"""
+
 from rest_framework import generics, status, filters
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
@@ -8,11 +15,13 @@ from .models import MenuItem, Category, Cart, Order, OrderItem
 from .serializers import MenuItemSerializer, CategorySerializer, CartSerializer, OrderSerializer
 from datetime import date
 
+# --- Category Views ---
 class CategoriesView(generics.ListCreateAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
 
+# --- Menu Item Views ---
 class MenuItemsView(generics.ListCreateAPIView):
     queryset = MenuItem.objects.all()
     serializer_class = MenuItemSerializer
@@ -34,6 +43,7 @@ class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
             return [IsAuthenticated()]
         return [IsAdminUser()]
 
+# --- User Group Management (RBAC) ---
 @api_view(['POST', 'DELETE'])
 @permission_classes([IsAdminUser])
 def managers(request):
@@ -43,10 +53,10 @@ def managers(request):
         managers_group = Group.objects.get(name="Manager")
         if request.method == 'POST':
             managers_group.user_set.add(user)
-            return Response({"message": "User added to Manager group"}, status.HTTP_201_CREATED)
+            return Response({"message": f"User {username} added to Manager group"}, status.HTTP_201_CREATED)
         elif request.method == 'DELETE':
             managers_group.user_set.remove(user)
-            return Response({"message": "User removed from Manager group"}, status.HTTP_200_OK)
+            return Response({"message": f"User {username} removed from Manager group"}, status.HTTP_200_OK)
     return Response({"message": "Username is required"}, status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST', 'DELETE'])
@@ -58,14 +68,14 @@ def delivery_crew(request):
         delivery_group = Group.objects.get(name="Delivery crew")
         if request.method == 'POST':
             delivery_group.user_set.add(user)
-            return Response({"message": "User added to Delivery crew"}, status.HTTP_201_CREATED)
+            return Response({"message": f"User {username} added to Delivery crew"}, status.HTTP_201_CREATED)
         elif request.method == 'DELETE':
             delivery_group.user_set.remove(user)
-            return Response({"message": "User removed from Delivery crew"}, status.HTTP_200_OK)
+            return Response({"message": f"User {username} removed from Delivery crew"}, status.HTTP_200_OK)
     return Response({"message": "Username is required"}, status.HTTP_400_BAD_REQUEST)
 
+# --- Cart System ---
 class CartView(generics.ListCreateAPIView):
-    queryset = Cart.objects.all()
     serializer_class = CartSerializer
     permission_classes = [IsAuthenticated]
 
@@ -82,10 +92,10 @@ class CartView(generics.ListCreateAPIView):
 
     def delete(self, request, *args, **kwargs):
         Cart.objects.filter(user=request.user).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({"message": "Cart cleared successfully"}, status.HTTP_204_NO_CONTENT)
 
+# --- Order Management ---
 class OrdersView(generics.ListCreateAPIView):
-    queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
@@ -106,7 +116,13 @@ class OrdersView(generics.ListCreateAPIView):
         order = Order.objects.create(user=request.user, status=False, total=total, date=date.today())
 
         for item in cart_items:
-            OrderItem.objects.create(order=order, menuitem=item.menuitem, quantity=item.quantity, unit_price=item.unit_price, price=item.price)
+            OrderItem.objects.create(
+                order=order, 
+                menuitem=item.menuitem, 
+                quantity=item.quantity, 
+                unit_price=item.unit_price, 
+                price=item.price
+            )
             item.delete()
 
         return Response(OrderSerializer(order).data, status.HTTP_201_CREATED)
@@ -119,12 +135,15 @@ class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
     def update(self, request, *args, **kwargs):
         user = self.request.user
         order = self.get_object()
-        # المدير يمكنه إسناد عامل توصيل
+        
+        # Managers can update anything (assign delivery crew, etc.)
         if user.groups.filter(name='Manager').exists():
             return super().update(request, *args, **kwargs)
-        # عامل التوصيل يمكنه فقط تغيير حالة الطلب (Status)
+        
+        # Delivery crew can ONLY update the 'status' field
         if user.groups.filter(name='Delivery crew').exists():
             if 'status' in request.data and len(request.data) == 1:
                 return super().update(request, *args, **kwargs)
-            return Response({"message": "You can only update the order status"}, status.HTTP_403_FORBIDDEN)
+            return Response({"message": "You are only allowed to update order status"}, status.HTTP_403_FORBIDDEN)
+            
         return Response({"message": "Access denied"}, status.HTTP_403_FORBIDDEN)
