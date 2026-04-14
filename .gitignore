@@ -1,15 +1,9 @@
-# Django
-*.pyc
-__pycache__/
-db.sqlite3
+node_modules/
+.cache/
+build/
 .env
-
-# Environments
-.venv/
-env/
 venv/
-pipwheel-cache/
-
-# OS files
-.DS_Store
-Thumbs.db
+.venv
+__pycache__/
+*.pyc
+db.sqlite3
